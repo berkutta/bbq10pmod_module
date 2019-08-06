@@ -10,6 +10,8 @@
 #include <linux/property.h>
 #include <linux/slab.h>
 #include <linux/types.h>
+#include <linux/timer.h>
+#include <linux/jiffies.h>
 
 //#define DEBUG
 
@@ -103,6 +105,7 @@ struct bbq10pmod_data {
 	unsigned short keycode[NUM_KEYCODES];
 	struct i2c_client *client;
 	struct input_dev *input;
+	struct timer_list timer;
 };
 
 static int bbq10pmod_write_reg(struct bbq10pmod_data *drv_data, u8 reg)
@@ -240,9 +243,9 @@ static void bbq10pmod_read_fifo(struct bbq10pmod_data *drv_data)
 	input_sync(input);
 }
 
-static irqreturn_t bbq10pmod_irq_handler(int irq, void *dev_id)
+static void bbq10pmod_irq_handler(struct timer_list *t)
 {
-	struct bbq10pmod_data *drv_data = dev_id;
+	struct bbq10pmod_data *drv_data = from_timer(drv_data, t, timer);
 	struct i2c_client *client = drv_data->client;
 	int error;
 	u8 reg;
@@ -370,14 +373,24 @@ static int bbq10pmod_probe(struct i2c_client *client, const struct i2c_device_id
 
 	input_set_capability(input, EV_MSC, MSC_SCAN);
 
+	/*
 	error = devm_request_threaded_irq(dev, client->irq,
 										NULL, bbq10pmod_irq_handler,
 										IRQF_SHARED | IRQF_ONESHOT,
 										client->name, drv_data);
 	if (error) {
-		dev_err(dev, "Failed to claim irq %d; error %d\n", client->irq, error);
+		dev_err(dev, "Failed to claim irq %d; error %d\n", cl§§§ient->irq, error);
 		return error;
 	}
+	*/
+
+    //init_timer_key(&my_timer, (void*)bbq10pmod_irq_handler, "my timer", NULL, NULL);
+	timer_setup(&drv_data->timer, bbq10pmod_irq_handler, 0);
+	
+    //my_timer.data = &drv_data; // a context pointer (poor man's "this" pointer)
+    //my_timer.function = bbq10pmod_irq_handler;
+    //my_timer.expires = jiffies + 100; // = now + delay
+    add_timer(&drv_data->timer);
 
 	error = input_register_device(input);
 	if (error) {
